@@ -223,7 +223,7 @@ class Store_system_client(object):
             # print("after enc:", len(self.data[i]))
         
         print("加密数据完成。")
-        print(self.get_content_of_pack(self.data[0]))
+        # print(self.get_content_of_pack(self.data[0]))
 
         # print(len(self.data[0]))
 
@@ -323,15 +323,6 @@ class Store_system_client(object):
                 return A
         
         return -1
-
-
-
-            
-
-
-
-
-
     
     def pack_trans(self, packdata) -> None:
         try:
@@ -426,6 +417,7 @@ class Store_system_client(object):
                 status_code = struct.unpack('i', self.client.recv(4, socket.MSG_WAITALL))[0]
                 if status_code == self.GET_INFO:
                     range_pack.append(self.recv_data())
+                    pack_content = self.get_content_of_pack(range_pack[-1])
                 elif status_code == self.GET_EMPTY_PACK:
                     pass
             
@@ -434,8 +426,8 @@ class Store_system_client(object):
         查询请求
         '''
         if id >= 0 and id < self.info_length:
-            self.client.send(self.ORE.ore_enc(bin(id)[2:], self.OREKey).encode('utf-8'))
-            status_code = struct.unpack('i', self.c.recv(4, socket.MSG_WAITALL))[0]
+            self.pack_trans(self.ORE.ore_enc(bin(id)[2:], self.OREKey).encode('utf-8'))
+            status_code = struct.unpack('i', self.client.recv(4, socket.MSG_WAITALL))[0]
             if status_code == self.GET_INFO:
                 infoid = id % self.packsize
                 total_data = self.recv_data()
@@ -478,7 +470,6 @@ class Store_system_client(object):
         last_pack = self.get_content_of_pack(self.recv_data())
 
         if len(last_pack) < self.packsize:#默认插入最后一个包
-            print("t")
             last_pack.append(new_content)
             # print(last_pack)
             new_data = self.pack2row(last_pack)
@@ -490,7 +481,8 @@ class Store_system_client(object):
                 self.pack_trans(last_pack_data)
                 self.BUFF_info = 0
             else:
-                self.client.send()
+                self.client.send(struct.pack("i", self.STOP_A))
+            return None
         else:
             self.packnums += 1
             if self.BUFF_info > 0:
@@ -555,7 +547,7 @@ class Store_system_client(object):
             # print '连接地址：', addr
 
             try:
-
+                self.TEST_GET()
                 msg = input('Please Input Command:')  #strip默认取出字符串的头尾空格
                 if msg == 'get':
                     # self.TEST_GET()
@@ -566,8 +558,8 @@ class Store_system_client(object):
                     self.pack_trans(msg.encode('utf-8'))
                     break
                 elif msg == 'put':
-                    print("test once")
-                    self.pack_trans(msg.encode('utf-8'))
+                    # print("test once")
+                    # self.pack_trans(msg.encode('utf-8'))
                     colnum = 13
                     new_content = ''
                     # new_record = ['ss','aa','bb','cc','dd','ee','ff','dd','aa','aa','bb','cc']

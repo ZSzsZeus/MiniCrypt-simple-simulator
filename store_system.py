@@ -110,6 +110,9 @@ class Store_System(object):
         self.GET_INFO = 401
         self.GET_EMPTY_PACK = 402
 
+        #中断操作状态码
+        self.STOP_A = 404
+
         print("当前时间:"+time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
         print("启动服务器")
         # AF_INET --> IPv4  SOCK_STREAM --> TCP 
@@ -280,19 +283,24 @@ class Store_System(object):
         '''
         #向Client传输包
         self.send_pack(self.data[-1])
-        print("chuanshuwancheng")
         status_code = struct.unpack('i', self.c.recv(4, socket.MSG_WAITALL))[0]
-        print(status_code)
+        # print(status_code)
         if status_code == self.UPDATE_BUFF:
+            # print("UPDATA_BUFF")
             self.data[-1] = self.recv_large_data()
         elif status_code == self.UPDATE_BUFF_AND_CREATE_NEW_PACK:
+            # print("UPDATE_BUFF_AND_CREATE_NEW_PACK")
             self.data[-1] = self.recv_large_data()
             self.Pid2Pack.append(self.recv_large_data().decode())
             self.data.append(self.recv_large_data())
         elif status_code == self.CREATE_NEW_PACK_ONLY:
+            # print("CREATE_NEW_PACK_ONLY")
             self.Pid2Pack.append(self.recv_large_data().decode())
             self.data.append(self.recv_large_data())
-        print("y")
+        elif status_code == self.STOP_A:
+            # print("STOP_A")
+            return None
+        # print("y")
         return None
     
     def del_key(self) -> None:
