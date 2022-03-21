@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import os
+import secrets
 from pydoc import cli
 from re import M
 import socket# 客户端 发送一个数据，再接收一个数据
@@ -17,10 +18,11 @@ import struct
 from ore import ore as ORE
 import base64
 import numpy as np
-
-key = '6A4B3C7D9E2F1F3F'
-iv = 'qqqqqqqqqqqqqqqq'
-
+import random
+# key = '6A4B3C7D9E2F1F3F'
+# iv = 'qqqqqqqqqqqqqqqq'
+key = secrets.token_bytes(16)
+iv = secrets.token_bytes(16)
 # 如果text不足16位的倍数就用空格补足为16位
 def add_to_16(text) -> bytes:
     if len(text.encode('utf-8')) % 16:
@@ -37,7 +39,7 @@ def encrypt(text) -> bytes:
     # print("before add:", len(text))
     text = add_to_16(text)
     # print("after add:", len(text))
-    cryptos = AES.new(key.encode('utf-8'), mode, iv.encode('utf-8'))
+    cryptos = AES.new(key, mode, iv)
     cipher_text = cryptos.encrypt(text)
     # print("cipher len:", len(cipher_text))
     # 因为AES加密后的字符串不一定是ascii字符集的，输出保存可能存在问题，所以这里转为16进制字符串
@@ -48,7 +50,7 @@ def encrypt(text) -> bytes:
 # 解密后，去掉补足的空格用strip() 去掉
 def decrypt(text) -> str:
     mode = AES.MODE_CBC
-    cryptos = AES.new(key.encode('utf-8'), mode, iv.encode('utf-8'))
+    cryptos = AES.new(key, mode, iv)
     # plain_text = cryptos.decrypt(a2b_hex(text))
     # plain_text = cryptos.decrypt(base64.decodebytes(text))
     plain_text = cryptos.decrypt(text)
@@ -166,7 +168,7 @@ class monitor(object):
 
 class Store_system_client(object):
 
-    def __init__(self, port, filepath, packsize) -> None:
+    def __init__(self, port, filepath, packsize, security=True) -> None:
         self.port = port
         self.host = socket.gethostname()
         self.filepath = filepath
@@ -208,24 +210,23 @@ class Store_system_client(object):
             # self.data_origin_length.append(len(self.compress_data[i]))
         
         self.data_origin_length.sort()
-        print("填充压缩包...")
-        A = self.Gen_l_length()
-        print(A)
-        if A != -1:
-            self.compress_data = self.add_pack(self.compress_data, A)
-            print("完成填充。")
-        # MAX_consistency = 
+        if security:
+            print("填充压缩包...")
+            A = self.Gen_l_length()
+            print(A)
+            if A != -1:
+                self.compress_data = self.add_pack(self.compress_data, A)
+                print("完成填充。")
         
-        # for i in tqdm(range(len(self.compress_data))):
+
+
         for i in range(len(self.compress_data)):
             # print("before enc:",self.data_origin_length[i])
             self.data.append(encrypt(self.compress_data[i].decode()))
             # print("after enc:", len(self.data[i]))
         
         print("加密数据完成。")
-        # print(self.get_content_of_pack(self.data[0]))
 
-        # print(len(self.data[0]))
 
         self.client = socket.socket(socket.AF_INET,socket.SOCK_STREAM) #声明socket类型，同时生成链接对象
         # self.client.connect(('47.101.183.28',12345)) #建立一个链接
@@ -240,9 +241,11 @@ class Store_system_client(object):
         # sleep(1)
         print("通知总数据包数量...")
         # self.packnums = len(self.data)
+        seed_ = os.urandom(16)
+        random.seed(seed_)
+        random.shuffle(self.data)
         self.client.send(struct.pack('i', self.packnums))
         for i in tqdm(range(len(self.data))):
-            # self.client.send(self.ORE.ore_enc(bin(i)[2:], self.OREKey).encode('utf-8'))
             self.pack_trans(self.ORE.ore_enc(bin(i*self.packsize)[2:], self.OREKey).encode('utf-8'))
             self.pack_trans(self.data[i])
         print("传输数据完成。")
@@ -305,9 +308,10 @@ class Store_system_client(object):
 
         MAX_storage_cost = max_length * self.packnums
 
-        fq_write = 0.5
+        fq_write = 50
+        fq_get = 500
 
-        origin_bandwidth_cost = (1 + fq_write)*(origin_storage_cost / self.packnums)*self.packsize
+        origin_bandwidth_cost = (2*fq_write + fq_get)*(origin_storage_cost / self.packnums)
 
         MAX_bandwidth_cost = (1 + fq_write)*max_length*self.packsize
         
