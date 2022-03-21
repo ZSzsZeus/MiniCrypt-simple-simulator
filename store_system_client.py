@@ -270,12 +270,13 @@ class Store_system_client(object):
         x = x / self.max_std
         return x
 
-    def cal_cost(self, L_length:list, fq_write=0.5):
+    def cal_cost(self, L_length:list, fq_write=5e5, fq_get=10e4):
         avg_packsize = np.mean(L_length)
 
         storage_cost = self.packnums * avg_packsize
 
-        bandwidth_cost = (1 + fq_write)*avg_packsize*self.packsize
+        # bandwidth_cost = (1 + fq_write)*avg_packsize*self.packsize
+        bandwidth_cost = 2*fq_write*avg_packsize + fq_get*avg_packsize
 
         length_set = set(L_length)
 
@@ -291,7 +292,12 @@ class Store_system_client(object):
     def cal_param(self, x, max, origin):
         return (x - origin) / (max - origin)
     
-    def Gen_l_length(self, miu=0.5, seta=0.5, beta=0.5):
+    def Gen_l_length(self, miu=0.1, seta=0.5, beta=0.1):
+        '''
+        miu:存储开销参数
+        seta:带宽开销参数
+        beta:安全开销参数
+        '''
         max_length = self.data_origin_length[-1]
         max_length += 16 - (max_length % 16)
 
@@ -308,12 +314,12 @@ class Store_system_client(object):
 
         MAX_storage_cost = max_length * self.packnums
 
-        fq_write = 50
-        fq_get = 500
+        fq_write = 5e5
+        fq_get = 10e4
 
         origin_bandwidth_cost = (2*fq_write + fq_get)*(origin_storage_cost / self.packnums)
 
-        MAX_bandwidth_cost = (1 + fq_write)*max_length*self.packsize
+        MAX_bandwidth_cost = (2*fq_write + fq_get)*max_length
         
         print(max_length)
         MAX_L = int(max_length / 16)
