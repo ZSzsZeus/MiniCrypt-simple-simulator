@@ -326,7 +326,6 @@ class Store_System(object):
 
 if __name__ == '__main__':
     system = Store_System(port=12345)
-    # print(system.binarySearch(7.5,[1,2,3,4,5,6]))
     system.activate_server()
 
 
