@@ -168,13 +168,14 @@ class monitor(object):
 
 class Store_system_client(object):
 
-    def __init__(self, port, filepath, packsize, security=True) -> None:
+    def __init__(self, port, filepath, packsize, security=True, if_test=True) -> None:
         self.port = port
         self.host = socket.gethostname()
         self.filepath = filepath
         self.packsize = packsize
         self.ORE = ORE.ore()
         self.OREKey = self.ORE.rnd_word(10)
+        self.if_test = if_test
         print("获取数据并压缩...")
 
         self.monitor = monitor(self.filepath)
@@ -208,7 +209,7 @@ class Store_system_client(object):
         # for i in range(len(self.compress_data)):
             # self.compress_data[i] = b2a_hex(self.compress_data[i])
             # self.data_origin_length.append(len(self.compress_data[i]))
-        
+        start_time = time.time()
         self.data_origin_length.sort()
         if security:
             print("填充压缩包...")
@@ -226,6 +227,7 @@ class Store_system_client(object):
             # print("after enc:", len(self.data[i]))
         
         print("加密数据完成。")
+        print("buildindex耗时:%f", time.time() - start_time)
 
 
         self.client = socket.socket(socket.AF_INET,socket.SOCK_STREAM) #声明socket类型，同时生成链接对象
@@ -270,12 +272,13 @@ class Store_system_client(object):
         x = x / self.max_std
         return x
 
-    def cal_cost(self, L_length:list, fq_write=0.5):
+    def cal_cost(self, L_length:list, fq_write=5e5, fq_get=10e4):
         avg_packsize = np.mean(L_length)
 
         storage_cost = self.packnums * avg_packsize
 
-        bandwidth_cost = (1 + fq_write)*avg_packsize*self.packsize
+        # bandwidth_cost = (1 + fq_write)*avg_packsize*self.packsize
+        bandwidth_cost = 2*fq_write*avg_packsize + fq_get*avg_packsize
 
         length_set = set(L_length)
 
@@ -291,7 +294,12 @@ class Store_system_client(object):
     def cal_param(self, x, max, origin):
         return (x - origin) / (max - origin)
     
-    def Gen_l_length(self, miu=0.5, seta=0.5, beta=0.5):
+    def Gen_l_length(self, miu=0.1, seta=0.5, beta=0.1):
+        '''
+        miu:存储开销参数
+        seta:带宽开销参数
+        beta:安全开销参数
+        '''
         max_length = self.data_origin_length[-1]
         max_length += 16 - (max_length % 16)
 
@@ -308,12 +316,12 @@ class Store_system_client(object):
 
         MAX_storage_cost = max_length * self.packnums
 
-        fq_write = 50
-        fq_get = 500
+        fq_write = 5e5
+        fq_get = 10e4
 
         origin_bandwidth_cost = (2*fq_write + fq_get)*(origin_storage_cost / self.packnums)
 
-        MAX_bandwidth_cost = (1 + fq_write)*max_length*self.packsize
+        MAX_bandwidth_cost = (2*fq_write + fq_get)*max_length
         
         print(max_length)
         MAX_L = int(max_length / 16)
@@ -406,13 +414,14 @@ class Store_system_client(object):
             print("invalid id!")
         
         return None
-    def get_range_info(self):
+    def get_range_info(self, start_id, end_id):
         '''
         范围查询
         '''
         range_pack = list()
-        start_id = int(input('Please Input the start ID of the record you want to get:'))
-        end_id = int(input('Please Input the end ID of the record you want to get:'))
+        # start_id = int(input('Please Input the start ID of the record you want to get:'))
+        # end_id = int(input('Please Input the end ID of the record you want to get:'))
+        start_time = time.time()
         if start_id >= 0 and start_id < self.info_length and end_id >= 0 and end_id < self.info_length and end_id > start_id:
             self.pack_trans(self.ORE.ore_enc(bin(start_id)[2:], self.OREKey).encode('utf-8'))
             self.pack_trans(self.ORE.ore_enc(bin(end_id)[2:], self.OREKey).encode('utf-8'))
@@ -424,7 +433,8 @@ class Store_system_client(object):
                     pack_content = self.get_content_of_pack(range_pack[-1])
                 elif status_code == self.GET_EMPTY_PACK:
                     pass
-            
+        return time.time() - start_time
+    
     def get_info_TEST(self, id) -> None:
         '''
         查询请求
@@ -551,7 +561,8 @@ class Store_system_client(object):
             # print '连接地址：', addr
 
             try:
-                self.TEST_GET()
+                if self.if_test:
+                    self.TEST_GET()
                 msg = input('Please Input Command:')  #strip默认取出字符串的头尾空格
                 if msg == 'get':
                     # self.TEST_GET()
@@ -573,7 +584,7 @@ class Store_system_client(object):
                     # self.put_info(new_content)
                     print("muti tests")
                     start_time = time.time()
-                    for i in range(10):
+                    for i in range(1000):
                         self.pack_trans(msg.encode('utf-8'))
                         self.put_info(new_content)
                     # self.put_info(new_content)
@@ -584,9 +595,22 @@ class Store_system_client(object):
 
                     self.del_info(id)
                 elif msg == 'range_get':
-                    self.pack_trans(msg.encode('utf-8'))
-                    self.get_range_info()
-
+                    if self.if_test:
+                        total_time = 0
+                        for i in range(1000):
+                            
+                            self.pack_trans(msg.encode('utf-8'))
+                            # start_id = int(input('Please Input the start ID of the record you want to get:'))
+                            # end_id = int(input('Please Input the end ID of the record you want to get:'))
+                            start_id = 0
+                            end_id = start_id + (i + 1) * 9
+                            total_time += self.get_range_info(start_id, end_id)
+                        print("time cost:%f", total_time / 1000)
+                    else:
+                        self.pack_trans(msg.encode('utf-8'))
+                        start_id = int(input('Please Input the start ID of the record you want to get:'))
+                        end_id = int(input('Please Input the end ID of the record you want to get:'))
+                        _ = self.get_range_info(start_id, end_id)
 
                 else:
                     print("this command is not supported on this device")
